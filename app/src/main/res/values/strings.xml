@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Green House</string>
+    <string name="house_title">GREEN HOUSE</string>
+    <string name="school_name">REV. WILLIAM WARD SENIOR SECONDARY SCHOOL</string>
+    <string name="portal_subtitle">SPORTS &amp; CULTURAL WEEK</string>
+    <string name="house_motto">UNITED IN STRENGTH. UNSTOPPABLE IN SPIRIT.</string>
+    <string name="cta_register_events">REGISTER FOR EVENTS</string>
+    <string name="cta_management_login">HOUSE MANAGEMENT LOGIN</string>
+    <string name="cta_submit_participation">SUBMIT PARTICIPATION</string>
+    <string name="cta_sign_in_google">Sign in with Google</string>
+    <string name="registration_success_title">REGISTRATION SUCCESSFUL</string>
+    <string name="registration_success_body">Your participation has been recorded successfully.\n\nThank you for being a part of Green House!</string>
+    <string name="registration_closed_default">Student registrations are currently closed by Green House Management. Please contact your House Captain or Teacher-in-Charge for assistance.</string>
+    <string name="cd_green_house_logo">Green House Official Crest</string>
+</resources>

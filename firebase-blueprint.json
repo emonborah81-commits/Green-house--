@@ -1,0 +1,444 @@
+{
+  "entities": {
+    "Participant": {
+      "title": "Participant",
+      "description": "A student participation record for Green House Sports & Cultural Week.",
+      "type": "object",
+      "properties": {
+        "studentName": {
+          "type": "string",
+          "description": "Full name of the participating student (2-100 chars)."
+        },
+        "rollNumber": {
+          "type": "string",
+          "description": "Display roll number entered by the student (1-40 chars)."
+        },
+        "normalizedRollNumber": {
+          "type": "string",
+          "description": "Uppercase alphanumeric normalized roll number for uniqueness enforcement."
+        },
+        "registrationScope": {
+          "type": "string",
+          "description": "Active registration year or scope identifier (e.g., 2026)."
+        },
+        "sportsEventIds": {
+          "type": "array",
+          "description": "Selected sports event document IDs (max 20)."
+        },
+        "culturalEventIds": {
+          "type": "array",
+          "description": "Selected cultural event document IDs (max 20)."
+        },
+        "sportsEventNames": {
+          "type": "array",
+          "description": "Selected sports event display names (max 20)."
+        },
+        "culturalEventNames": {
+          "type": "array",
+          "description": "Selected cultural event display names (max 20)."
+        },
+        "submittedByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who submitted the registration."
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when registration was submitted (FieldValue.serverTimestamp())."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable creation server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "studentName",
+        "rollNumber",
+        "normalizedRollNumber",
+        "registrationScope",
+        "sportsEventIds",
+        "culturalEventIds",
+        "sportsEventNames",
+        "culturalEventNames",
+        "submittedByUid",
+        "submittedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RollLock": {
+      "title": "RollLock",
+      "description": "Uniqueness constraint lock keyed by {registrationScope}__{normalizedRollNumber}.",
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "description": "Linked participant document ID."
+        },
+        "registrationScope": {
+          "type": "string",
+          "description": "Active registration scope."
+        },
+        "normalizedRollNumber": {
+          "type": "string",
+          "description": "Normalized roll number."
+        },
+        "submittedByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID that created the lock."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "participantId",
+        "registrationScope",
+        "normalizedRollNumber",
+        "submittedByUid",
+        "createdAt"
+      ]
+    },
+    "PortalEvent": {
+      "title": "PortalEvent",
+      "description": "A sports or cultural event available in Green House Week.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Event display name (2-80 chars)."
+        },
+        "normalizedName": {
+          "type": "string",
+          "description": "Lowercase trimmed event name for duplicate detection."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["SPORTS", "CULTURAL"],
+          "description": "Event category."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the event is visible and selectable on student registration."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Soft-delete flag preserving historical participation records."
+        },
+        "sortOrder": {
+          "type": "integer",
+          "description": "Display ordering integer."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable creation server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "name",
+        "normalizedName",
+        "category",
+        "enabled",
+        "archived",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ParticipantEventSelection": {
+      "title": "ParticipantEventSelection",
+      "description": "Normalized relational join record between a participant and a selected event.",
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "description": "Participant document ID."
+        },
+        "eventId": {
+          "type": "string",
+          "description": "Event document ID."
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Event display name snapshot."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["SPORTS", "CULTURAL"],
+          "description": "Event category."
+        },
+        "registrationScope": {
+          "type": "string",
+          "description": "Registration scope."
+        },
+        "submittedByUid": {
+          "type": "string",
+          "description": "UID of submitter."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "participantId",
+        "eventId",
+        "eventName",
+        "category",
+        "registrationScope",
+        "submittedByUid",
+        "createdAt"
+      ]
+    },
+    "ManagementProfile": {
+      "title": "ManagementProfile",
+      "description": "Role-based authorization profile bound to an authenticated Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID matching document ID."
+        },
+        "email": {
+          "type": "string",
+          "description": "Verified Google account email."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Management member full name."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["CAPTAIN", "VICE_CAPTAIN", "VOLUNTEER", "TEACHER"],
+          "description": "Assigned management role."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether management access is active."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable creation server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "email",
+        "displayName",
+        "role",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PortalSettings": {
+      "title": "PortalSettings",
+      "description": "Portal registration status, scope, and selection rule configuration.",
+      "type": "object",
+      "properties": {
+        "registrationOpen": {
+          "type": "boolean",
+          "description": "Whether student registration is currently open."
+        },
+        "registrationScope": {
+          "type": "string",
+          "description": "Current active registration scope (e.g., 2026)."
+        },
+        "maxSportsEvents": {
+          "type": "integer",
+          "description": "Maximum sports events a student can choose (1-20)."
+        },
+        "maxCulturalEvents": {
+          "type": "integer",
+          "description": "Maximum cultural events a student can choose (1-20)."
+        },
+        "closedMessage": {
+          "type": "string",
+          "description": "Message shown to students when registration is closed."
+        },
+        "updatedByUid": {
+          "type": "string",
+          "description": "UID of Captain or Teacher who updated settings."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable creation server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "registrationOpen",
+        "registrationScope",
+        "maxSportsEvents",
+        "maxCulturalEvents",
+        "closedMessage",
+        "updatedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable audit trail of privileged management actions.",
+      "type": "object",
+      "properties": {
+        "actorUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of acting manager."
+        },
+        "actorName": {
+          "type": "string",
+          "description": "Display name of acting manager."
+        },
+        "actorRole": {
+          "type": "string",
+          "enum": ["CAPTAIN", "VICE_CAPTAIN", "VOLUNTEER", "TEACHER"],
+          "description": "Role of acting manager."
+        },
+        "action": {
+          "type": "string",
+          "description": "Action code (e.g., PARTICIPANT_EDITED, EVENT_ADDED, REGISTRATION_CLOSED)."
+        },
+        "recordType": {
+          "type": "string",
+          "description": "Entity type affected (PARTICIPANT, EVENT, SETTINGS, MANAGEMENT_PROFILE, INVITE)."
+        },
+        "recordId": {
+          "type": "string",
+          "description": "Affected document identifier."
+        },
+        "details": {
+          "type": "string",
+          "description": "Human-readable details of the action."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "actorUid",
+        "actorName",
+        "actorRole",
+        "action",
+        "recordType",
+        "recordId",
+        "details",
+        "createdAt"
+      ]
+    },
+    "ManagementInvite": {
+      "title": "ManagementInvite",
+      "description": "Single-use setup pass keyed by SHA-256 hash of a one-time setup code.",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["CAPTAIN", "VICE_CAPTAIN", "VOLUNTEER", "TEACHER"],
+          "description": "Role granted upon one-time redemption."
+        },
+        "label": {
+          "type": "string",
+          "description": "Descriptive label for the setup pass."
+        },
+        "targetEmail": {
+          "type": "string",
+          "description": "Optional verified email restriction (empty string allows any verified Google account with the one-time code)."
+        },
+        "redeemed": {
+          "type": "boolean",
+          "description": "Whether this one-time setup pass has been consumed."
+        },
+        "redeemedByUid": {
+          "type": "string",
+          "description": "UID that redeemed this invite (empty until redeemed)."
+        },
+        "createdByUid": {
+          "type": "string",
+          "description": "UID of Captain or Teacher who issued the invite."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modification server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "role",
+        "label",
+        "targetEmail",
+        "redeemed",
+        "redeemedByUid",
+        "createdByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/Participant" },
+      "description": "Student participation submissions; private to management users."
+    },
+    "/roll_locks/{lockId}": {
+      "schema": { "$ref": "#/entities/RollLock" },
+      "description": "Atomic roll-number uniqueness locks scoped by registrationScope__normalizedRollNumber."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/PortalEvent" },
+      "description": "Sports and cultural events; students can only list enabled non-archived events."
+    },
+    "/participant_event_selections/{selectionId}": {
+      "schema": { "$ref": "#/entities/ParticipantEventSelection" },
+      "description": "Relational participant-to-event selection records."
+    },
+    "/management_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/ManagementProfile" },
+      "description": "Authenticated management accounts and server-enforced RBAC roles."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PortalSettings" },
+      "description": "Portal-wide registration open/close status and rules stored at settings/portal."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable management audit log readable only by Captain and Teacher roles."
+    },
+    "/management_invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/ManagementInvite" },
+      "description": "Single-use SHA-256 keyed setup passes for onboarding management accounts."
+    }
+  }
+}

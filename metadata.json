@@ -1,0 +1,6 @@
+{
+  "name": "Green House",
+  "description": "Sports and Cultural Participation Portal for Green House at Rev. William Ward Senior Secondary School.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

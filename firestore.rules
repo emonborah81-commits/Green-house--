@@ -1,0 +1,537 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVE HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // Bootstrapped school portal owner (verified Google email strictly required)
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+             ('email' in request.auth.token) &&
+             ('email_verified' in request.auth.token) &&
+             request.auth.token.email == 'emonborah81@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    function hasManagementProfile() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/management_profiles/$(request.auth.uid));
+    }
+
+    function managementDoc() {
+      return get(/databases/$(database)/documents/management_profiles/$(request.auth.uid)).data;
+    }
+
+    function isActiveManager() {
+      return isBootstrappedAdmin() ||
+             (hasManagementProfile() && managementDoc().active == true);
+    }
+
+    function managerRole() {
+      return isBootstrappedAdmin() && !hasManagementProfile()
+        ? 'TEACHER'
+        : (hasManagementProfile() && managementDoc().active == true ? managementDoc().role : '');
+    }
+
+    function isFullAdmin() {
+      return isBootstrappedAdmin() ||
+             (isActiveManager() && (managerRole() == 'CAPTAIN' || managerRole() == 'TEACHER'));
+    }
+
+    function canEditParticipants() {
+      return isFullAdmin() ||
+             (isActiveManager() && managerRole() == 'VICE_CAPTAIN');
+    }
+
+    function canDeleteParticipants() {
+      return isFullAdmin();
+    }
+
+    function canManageEvents() {
+      return isFullAdmin() ||
+             (isActiveManager() && managerRole() == 'VICE_CAPTAIN');
+    }
+
+    function canDeleteEvents() {
+      return isFullAdmin();
+    }
+
+    function canControlRegistration() {
+      return isFullAdmin();
+    }
+
+    function canViewAuditLogs() {
+      return isFullAdmin();
+    }
+
+    function isValidRole(role) {
+      return role is string && (role == 'CAPTAIN' || role == 'VICE_CAPTAIN' || role == 'VOLUNTEER' || role == 'TEACHER');
+    }
+
+    function isValidCategory(category) {
+      return category is string && (category == 'SPORTS' || category == 'CULTURAL');
+    }
+
+    function isStringListBounded(listVal, maxLen) {
+      return listVal is list &&
+             listVal.size() <= maxLen &&
+             (listVal.size() == 0 || listVal[0] is string);
+    }
+
+    // --- ENTITY VALIDATION BLUEPRINTS ---
+    function isValidPortalSettings(data) {
+      return data.keys().hasAll([
+               'registrationOpen', 'registrationScope', 'maxSportsEvents',
+               'maxCulturalEvents', 'closedMessage', 'updatedByUid',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'registrationOpen', 'registrationScope', 'maxSportsEvents',
+               'maxCulturalEvents', 'closedMessage', 'updatedByUid',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.registrationOpen is bool &&
+             data.registrationScope is string &&
+             data.registrationScope.size() >= 2 && data.registrationScope.size() <= 32 &&
+             data.registrationScope.matches('^[a-zA-Z0-9_\\-]+$') &&
+             data.maxSportsEvents is int && data.maxSportsEvents >= 1 && data.maxSportsEvents <= 20 &&
+             data.maxCulturalEvents is int && data.maxCulturalEvents >= 1 && data.maxCulturalEvents <= 20 &&
+             data.closedMessage is string && data.closedMessage.size() <= 300 &&
+             data.updatedByUid is string && data.updatedByUid == request.auth.uid &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll([
+               'name', 'normalizedName', 'category', 'enabled',
+               'archived', 'sortOrder', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'name', 'normalizedName', 'category', 'enabled',
+               'archived', 'sortOrder', 'createdAt', 'updatedAt'
+             ]) &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+             data.normalizedName is string && data.normalizedName.size() >= 2 && data.normalizedName.size() <= 80 &&
+             isValidCategory(data.category) &&
+             data.enabled is bool &&
+             data.archived is bool &&
+             data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidParticipant(data) {
+      return data.keys().hasAll([
+               'studentName', 'rollNumber', 'normalizedRollNumber', 'registrationScope',
+               'sportsEventIds', 'culturalEventIds', 'sportsEventNames', 'culturalEventNames',
+               'submittedByUid', 'submittedAt', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'studentName', 'rollNumber', 'normalizedRollNumber', 'registrationScope',
+               'sportsEventIds', 'culturalEventIds', 'sportsEventNames', 'culturalEventNames',
+               'submittedByUid', 'submittedAt', 'createdAt', 'updatedAt'
+             ]) &&
+             data.studentName is string && data.studentName.size() >= 2 && data.studentName.size() <= 100 &&
+             data.rollNumber is string && data.rollNumber.size() >= 1 && data.rollNumber.size() <= 40 &&
+             data.normalizedRollNumber is string &&
+             data.normalizedRollNumber.size() >= 1 && data.normalizedRollNumber.size() <= 40 &&
+             data.normalizedRollNumber.matches('^[A-Z0-9_\\-]+$') &&
+             data.registrationScope is string &&
+             data.registrationScope.size() >= 2 && data.registrationScope.size() <= 32 &&
+             data.registrationScope.matches('^[a-zA-Z0-9_\\-]+$') &&
+             isStringListBounded(data.sportsEventIds, 20) &&
+             isStringListBounded(data.culturalEventIds, 20) &&
+             isStringListBounded(data.sportsEventNames, 20) &&
+             isStringListBounded(data.culturalEventNames, 20) &&
+             data.sportsEventIds.size() == data.sportsEventNames.size() &&
+             data.culturalEventIds.size() == data.culturalEventNames.size() &&
+             (data.sportsEventIds.size() + data.culturalEventIds.size()) >= 1 &&
+             data.submittedByUid is string && data.submittedByUid.size() >= 1 && data.submittedByUid.size() <= 128 &&
+             isValidTimestamp(data.submittedAt) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRollLock(data, lockId) {
+      return data.keys().hasAll([
+               'participantId', 'registrationScope', 'normalizedRollNumber',
+               'submittedByUid', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'participantId', 'registrationScope', 'normalizedRollNumber',
+               'submittedByUid', 'createdAt'
+             ]) &&
+             isValidId(data.participantId) &&
+             data.registrationScope is string &&
+             data.registrationScope.size() >= 2 && data.registrationScope.size() <= 32 &&
+             data.registrationScope.matches('^[a-zA-Z0-9_\\-]+$') &&
+             data.normalizedRollNumber is string &&
+             data.normalizedRollNumber.size() >= 1 && data.normalizedRollNumber.size() <= 40 &&
+             data.normalizedRollNumber.matches('^[A-Z0-9_\\-]+$') &&
+             lockId == (data.registrationScope + '__' + data.normalizedRollNumber) &&
+             data.submittedByUid is string && data.submittedByUid.size() >= 1 && data.submittedByUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidSelection(data, selectionId) {
+      return data.keys().hasAll([
+               'participantId', 'eventId', 'eventName', 'category',
+               'registrationScope', 'submittedByUid', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'participantId', 'eventId', 'eventName', 'category',
+               'registrationScope', 'submittedByUid', 'createdAt'
+             ]) &&
+             isValidId(data.participantId) &&
+             isValidId(data.eventId) &&
+             selectionId == (data.participantId + '__' + data.eventId) &&
+             data.eventName is string && data.eventName.size() >= 2 && data.eventName.size() <= 80 &&
+             isValidCategory(data.category) &&
+             data.registrationScope is string && data.registrationScope.size() >= 2 && data.registrationScope.size() <= 32 &&
+             data.submittedByUid is string && data.submittedByUid.size() >= 1 && data.submittedByUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidManagementProfile(data, targetUserId) {
+      return data.keys().hasAll([
+               'userId', 'email', 'displayName', 'role', 'active', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'email', 'displayName', 'role', 'active', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId == targetUserId &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             isValidRole(data.role) &&
+             data.active is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+               'actorUid', 'actorName', 'actorRole', 'action',
+               'recordType', 'recordId', 'details', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'actorUid', 'actorName', 'actorRole', 'action',
+               'recordType', 'recordId', 'details', 'createdAt'
+             ]) &&
+             data.actorUid is string && data.actorUid == request.auth.uid &&
+             data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100 &&
+             isValidRole(data.actorRole) &&
+             data.action is string && data.action.size() >= 2 && data.action.size() <= 64 &&
+             data.recordType is string && data.recordType.size() >= 2 && data.recordType.size() <= 40 &&
+             data.recordId is string && data.recordId.size() >= 1 && data.recordId.size() <= 128 &&
+             data.details is string && data.details.size() >= 1 && data.details.size() <= 500 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidInvite(data) {
+      return data.keys().hasAll([
+               'role', 'label', 'targetEmail', 'redeemed',
+               'redeemedByUid', 'createdByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'role', 'label', 'targetEmail', 'redeemed',
+               'redeemedByUid', 'createdByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidRole(data.role) &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 100 &&
+             data.targetEmail is string && data.targetEmail.size() <= 120 &&
+             data.redeemed is bool &&
+             data.redeemedByUid is string && data.redeemedByUid.size() <= 128 &&
+             data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- COLLECTION RULES ---
+
+    // Portal Settings (single doc: settings/portal)
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && settingId == 'portal';
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       settingId == 'portal' &&
+                       isValidPortalSettings(incoming()) &&
+                       canControlRegistration();
+
+      allow update: if isSignedIn() &&
+                       settingId == 'portal' &&
+                       isValidPortalSettings(incoming()) &&
+                       canControlRegistration() &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'registrationOpen', 'registrationScope', 'maxSportsEvents',
+                         'maxCulturalEvents', 'closedMessage', 'updatedByUid', 'updatedAt'
+                       ]);
+
+      allow delete: if false;
+    }
+
+    // Sports & Cultural Events
+    match /events/{eventId} {
+      allow get: if isSignedIn() &&
+                    isValidId(eventId) &&
+                    ((existing().enabled == true && existing().archived == false) || isActiveManager());
+
+      // Students must filter to enabled == true && archived == false; management can list all events
+      allow list: if isSignedIn() &&
+                     ((resource.data.enabled == true && resource.data.archived == false) || isActiveManager());
+
+      allow create: if isSignedIn() &&
+                       isValidId(eventId) &&
+                       isValidEvent(incoming()) &&
+                       canManageEvents();
+
+      allow update: if isSignedIn() &&
+                       isValidId(eventId) &&
+                       isValidEvent(incoming()) &&
+                       canManageEvents() &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'normalizedName', 'category', 'enabled',
+                         'archived', 'sortOrder', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(eventId) &&
+                       canDeleteEvents();
+    }
+
+    // Participants (Zero public access; students can create via authorized flow, never list or read others)
+    match /participants/{participantId} {
+      allow get: if isSignedIn() &&
+                    isValidId(participantId) &&
+                    (isActiveManager() || existing().submittedByUid == request.auth.uid);
+
+      // Only authenticated active management users can list participants
+      allow list: if isActiveManager();
+
+      allow create: if isSignedIn() &&
+                       isValidId(participantId) &&
+                       isValidParticipant(incoming()) &&
+                       incoming().submittedByUid == request.auth.uid &&
+                       exists(/databases/$(database)/documents/settings/portal) &&
+                       (
+                         isFullAdmin() ||
+                         get(/databases/$(database)/documents/settings/portal).data.registrationOpen == true
+                       ) &&
+                       incoming().registrationScope == get(/databases/$(database)/documents/settings/portal).data.registrationScope &&
+                       incoming().sportsEventIds.size() <= get(/databases/$(database)/documents/settings/portal).data.maxSportsEvents &&
+                       incoming().culturalEventIds.size() <= get(/databases/$(database)/documents/settings/portal).data.maxCulturalEvents &&
+                       existsAfter(/databases/$(database)/documents/roll_locks/$(incoming().registrationScope + '__' + incoming().normalizedRollNumber)) &&
+                       getAfter(/databases/$(database)/documents/roll_locks/$(incoming().registrationScope + '__' + incoming().normalizedRollNumber)).data.participantId == participantId;
+
+      allow update: if isSignedIn() &&
+                       isValidId(participantId) &&
+                       isValidParticipant(incoming()) &&
+                       canEditParticipants() &&
+                       incoming().submittedByUid == existing().submittedByUid &&
+                       incoming().submittedAt == existing().submittedAt &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().registrationScope == existing().registrationScope &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'studentName', 'rollNumber', 'normalizedRollNumber',
+                         'sportsEventIds', 'culturalEventIds',
+                         'sportsEventNames', 'culturalEventNames', 'updatedAt'
+                       ]) &&
+                       existsAfter(/databases/$(database)/documents/roll_locks/$(incoming().registrationScope + '__' + incoming().normalizedRollNumber)) &&
+                       getAfter(/databases/$(database)/documents/roll_locks/$(incoming().registrationScope + '__' + incoming().normalizedRollNumber)).data.participantId == participantId;
+
+      allow delete: if isSignedIn() &&
+                       isValidId(participantId) &&
+                       canDeleteParticipants();
+    }
+
+    // Atomic Roll-Number Uniqueness Locks (never readable by students)
+    match /roll_locks/{lockId} {
+      allow get, list: if isActiveManager();
+
+      allow create: if isSignedIn() &&
+                       isValidId(lockId) &&
+                       isValidRollLock(incoming(), lockId) &&
+                       (
+                         (incoming().submittedByUid == request.auth.uid &&
+                          existsAfter(/databases/$(database)/documents/participants/$(incoming().participantId))) ||
+                         (canEditParticipants() &&
+                          existsAfter(/databases/$(database)/documents/participants/$(incoming().participantId)))
+                       );
+
+      allow update: if false;
+
+      allow delete: if isSignedIn() &&
+                       isValidId(lockId) &&
+                       canEditParticipants();
+    }
+
+    // Normalized Relational Participant-Event Selections
+    match /participant_event_selections/{selectionId} {
+      allow get, list: if isActiveManager();
+
+      allow create: if isSignedIn() &&
+                       isValidId(selectionId) &&
+                       isValidSelection(incoming(), selectionId) &&
+                       (
+                         (incoming().submittedByUid == request.auth.uid &&
+                          existsAfter(/databases/$(database)/documents/participants/$(incoming().participantId))) ||
+                         canEditParticipants()
+                       );
+
+      allow update: if false;
+
+      allow delete: if isSignedIn() &&
+                       isValidId(selectionId) &&
+                       canEditParticipants();
+    }
+
+    // Management Profiles (strictly prevents self-assigned role escalation)
+    match /management_profiles/{userId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    (request.auth.uid == userId || isFullAdmin());
+
+      allow list: if isFullAdmin();
+
+      // Create permitted ONLY for:
+      // (1) Bootstrapped admin creating their own initial profile, OR
+      // (2) Full admin (Captain/Teacher) provisioning a profile, OR
+      // (3) An authenticated user atomically redeeming an unused one-time setup invite
+      //     (role must exactly match the redeemed invite's role; cannot self-escalate)
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidManagementProfile(incoming(), userId) && (
+                         (isBootstrappedAdmin() && userId == request.auth.uid) ||
+                         isFullAdmin() ||
+                         (
+                           userId == request.auth.uid &&
+                           incoming().active == true &&
+                           incoming().email == request.auth.token.email &&
+                           request.auth.token.email_verified == true
+                         )
+                       ) && (
+                         isBootstrappedAdmin() ||
+                         isFullAdmin() ||
+                         // Enforce atomic invite redemption for non-admin self-onboarding
+                         // Caller writes management_profile_claims/{uid} pointing to the redeemed inviteId
+                         (
+                           existsAfter(/databases/$(database)/documents/management_invite_claims/$(userId)) &&
+                           getAfter(/databases/$(database)/documents/management_invite_claims/$(userId)).data.role == incoming().role
+                         )
+                       );
+
+      // Only Captains & Teachers (Full Admin) can update roles or active status;
+      // Users can update only their own displayName (never role or active!)
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidManagementProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         (isFullAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'role', 'active', 'updatedAt'])) ||
+                         (request.auth.uid == userId && incoming().role == existing().role && incoming().active == existing().active && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isFullAdmin();
+    }
+
+    // One-Time Setup Invites (keyed by SHA-256 hex of secret one-time setup code; non-listable by non-admins)
+    match /management_invites/{inviteId} {
+      // Direct get by exact SHA-256 hash allows verifying a code without exposing any other invites
+      allow get: if isSignedIn() &&
+                    isValidId(inviteId) &&
+                    (isFullAdmin() || (existing().redeemed == false && (existing().targetEmail == '' || (request.auth.token.email_verified == true && existing().targetEmail == request.auth.token.email))));
+
+      allow list: if isFullAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(inviteId) &&
+                       isValidInvite(incoming()) &&
+                       isFullAdmin() &&
+                       incoming().redeemed == false &&
+                       incoming().redeemedByUid == '' &&
+                       incoming().createdByUid == request.auth.uid;
+
+      // Action 1: Full admin revokes/updates; Action 2: Authenticated user atomically redeems unused invite
+      allow update: if isSignedIn() &&
+                       isValidId(inviteId) &&
+                       isValidInvite(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().createdByUid == existing().createdByUid &&
+                       incoming().role == existing().role && (
+                         (isFullAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'targetEmail', 'redeemed', 'redeemedByUid', 'updatedAt'])) ||
+                         (
+                           existing().redeemed == false &&
+                           incoming().redeemed == true &&
+                           incoming().redeemedByUid == request.auth.uid &&
+                           request.auth.token.email_verified == true &&
+                           (existing().targetEmail == '' || existing().targetEmail == request.auth.token.email) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['redeemed', 'redeemedByUid', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(inviteId) && isFullAdmin();
+    }
+
+    // Atomic Invite Claim Receipt (binds redeemed inviteId -> management_profiles/{uid} role)
+    match /management_invite_claims/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isFullAdmin());
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       userId == request.auth.uid &&
+                       incoming().keys().hasAll(['inviteId', 'role', 'claimedAt']) &&
+                       incoming().keys().hasOnly(['inviteId', 'role', 'claimedAt']) &&
+                       isValidId(incoming().inviteId) &&
+                       isValidRole(incoming().role) &&
+                       isValidTimestamp(incoming().claimedAt) &&
+                       exists(/databases/$(database)/documents/management_invites/$(incoming().inviteId)) &&
+                       get(/databases/$(database)/documents/management_invites/$(incoming().inviteId)).data.redeemed == false &&
+                       get(/databases/$(database)/documents/management_invites/$(incoming().inviteId)).data.role == incoming().role &&
+                       getAfter(/databases/$(database)/documents/management_invites/$(incoming().inviteId)).data.redeemed == true &&
+                       getAfter(/databases/$(database)/documents/management_invites/$(incoming().inviteId)).data.redeemedByUid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // Immutable Audit Logs (read only by Captain & Teacher; append-only by active management)
+    match /audit_logs/{logId} {
+      allow get, list: if canViewAuditLogs();
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidAuditLog(incoming()) &&
+                       isActiveManager() &&
+                       incoming().actorRole == managerRole();
+
+      allow update, delete: if false;
+    }
+  }
+}
